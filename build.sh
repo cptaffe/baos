@@ -1,3 +1,3 @@
 
-nasm -felf32 boot.s -o boot.o
-i686-elf-ld -T l.ld boot.o
+nasm -felf32 b.s -o b.o
+i686-elf-ld -T l.ld b.o
