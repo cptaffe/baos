@@ -37,16 +37,8 @@ _start:
 	mov esp, bsStackTop
 	mov ebp, esp
 
-	; allocate screen
-	sub esp, 0x10
-	mov dword [esp + 0xc], 0xb8000 ; address
-	mov dword [esp + 0x8], 25 ; height
-	mov dword [esp + 0x4], 80 ; width
-	mov dword [esp], 0
-	mov edi, esp
-	push edi
-
 	; clear screen
+	mov edi, Display
 	call Display.clear
 
 	; write string to screen
@@ -55,18 +47,32 @@ _start:
 	push ecx
 	mov edi, msg
 	mov esi, anon.doPrintCall
-	mov edx, [esp + 0x4] ; saved edi
+	mov edx, Display ; saved edi
 	call String.foreach
 	pop ecx
 	loop .lp
 
-	pop edi
 	pop ebp
 	; turn off interrupts, hang
+	mov edi, haltmsg
+	call puts
 	cli
 .hang:
 	hlt
 	jmp .hang
+
+puts:
+	push ebp
+	mov ebp, esp
+
+	mov edx, Display
+	mov esi, anon.doPrintCall
+	call String.foreach
+
+	pop ebp
+	ret
+
+
 
 ; Display {
 ;     dword addr
@@ -74,15 +80,20 @@ _start:
 ;     dword w
 ;     dword off
 ; }
+Display:
+	dd 0xb8000
+	dd 25
+	dd 80
+	dd 0
 
 ; clearDisplay(display *s);
 ; clear screen
 Display.clear:
 	; grab parameters from display
 	mov ebx, edi
-	mov edi, [ebx + 0xc]
-	mov ecx, [ebx + 0x8]
-	mov eax, [ebx + 0x4]
+	mov edi, [ebx]
+	mov ecx, [ebx + 0x4]
+	mov eax, [ebx + 0x8]
 	mul ecx
 	mov ecx, eax
 	mov eax, 0xf0 | ' '
@@ -101,13 +112,13 @@ Display.putcColor:
 	shl ecx, 8
 
 	; calculate di
-	mov edi, [eax + 0xc] ; addr
-	add edi, [eax] ; + offset
+	mov edi, [eax] ; addr
+	add edi, [eax + 0xc] ; + offset
 
 	; or with color byte
 	or esi, ecx
 	mov [edi], si
-	add dword [eax], 2 ; increment offset
+	add dword [eax + 0xc], 2 ; increment offset
 	ret
 
 ; String.foreach(char *s, func f(void *o, char c), void *o)
@@ -146,3 +157,4 @@ String.foreach:
 
 ; greeting msg
 msg db "Hello, World!", 0
+haltmsg db "halting!", 0
