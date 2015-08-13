@@ -20,7 +20,6 @@ bsStackBottom:
 resb 0x4000
 bsStackTop:
 
-; startup code
 section .text
 
 ; "anonymous" functions
@@ -47,7 +46,7 @@ _start:
 	push ecx
 	mov edi, msg
 	mov esi, anon.doPrintCall
-	mov edx, Display ; saved edi
+	mov edx, Display
 	call String.foreach
 	pop ecx
 	loop .lp
