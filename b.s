@@ -22,6 +22,15 @@ bsStackTop:
 
 ; startup code
 section .text
+
+; "anonymous" functions
+anon:
+	; doPrintCall(void *o, char c)
+	; wraps call to putcColor
+	.doPrintCall:
+		mov edx, 0x7
+		jmp Display.putcColor
+
 global _start
 _start:
 	; set stack to bootstrap stack
@@ -30,21 +39,28 @@ _start:
 
 	; allocate screen
 	sub esp, 0x10
-	mov dword [esp + 0xc], vid.addr
-	mov dword [esp + 0x8], vid.h
-	mov dword [esp + 0x4], vid.w
+	mov dword [esp + 0xc], 0xb8000 ; address
+	mov dword [esp + 0x8], 25 ; height
+	mov dword [esp + 0x4], 80 ; width
 	mov dword [esp], 0
 	mov edi, esp
+	push edi
 
 	; clear screen
-	call clear
+	call Display.clear
 
 	; write string to screen
-	mov edi, eax
-	mov esi, msg
-	mov edx, msg.len
-	call write
+	mov ecx, 10
+.lp:
+	push ecx
+	mov edi, msg
+	mov esi, anon.doPrintCall
+	mov edx, [esp + 0x4] ; saved edi
+	call String.foreach
+	pop ecx
+	loop .lp
 
+	pop edi
 	pop ebp
 	; turn off interrupts, hang
 	cli
@@ -52,16 +68,16 @@ _start:
 	hlt
 	jmp .hang
 
-; display {
-;     u32 addr;
-;     u32 h;
-;     u32 w;
-;     u32 off;
+; Display {
+;     dword addr
+;     dword h
+;     dword w
+;     dword off
 ; }
 
-; clear(display *s);
+; clearDisplay(display *s);
 ; clear screen
-clear:
+Display.clear:
 	; grab parameters from display
 	mov ebx, edi
 	mov edi, [ebx + 0xc]
@@ -76,33 +92,57 @@ clear:
 	mov eax, ebx ; return display
 	ret
 
-; write(display *s, char *msg, size_t len);
+; printDisplay(display *s, char c, byte color);
 ; write to screen
-write:
+Display.putcColor:
 	; parameters
-	mov eax, edi ; first param, display
-	mov ecx, edx ; third param, len
+	mov eax, edi ; display
+	mov ecx, edx ; color
+	shl ecx, 8
 
-	; TODO: outer loop for fitting
-	; in height & width constraints
+	; calculate di
+	mov edi, [eax + 0xc] ; addr
+	add edi, [eax] ; + offset
 
-	; write string to screen
-	mov edi, [eax + 0xc]
+	; or with color byte
+	or esi, ecx
+	mov [edi], si
+	add dword [eax], 2 ; increment offset
+	ret
+
+; String.foreach(char *s, func f(void *o, char c), void *o)
+String.foreach:
+	push ebp
+	mov ebp, esp
+
+; loop over characters
 .lp:
+	; get current char
 	xor eax, eax
-	mov al, [esi]
-	lea esi, [esi + 1]
-	or ax, vid.col << 8 ; or with color byte
-	mov [edi], ax
-	lea edi, [edi + 2]
-	loop .lp
+	mov al, [edi]
+	inc edi
+	; quit on null
+	test al, al
+	jz .break
+
+	; save registers, return eip; jmp to func
+	push edi
+	push esi
+	push edx
+	push .r
+	mov ebx, esi
+	mov edi, edx
+	mov esi, eax
+	jmp ebx
+.r:
+	pop edx
+	pop esi
+	pop edi
+
+	jmp .lp
+.break:
+	pop ebp
 	ret
 
 ; greeting msg
-msg db "Hello, World!"
-msg.len equ $-msg
-
-vid.addr equ 0xb8000
-vid.col equ 0x0f
-vid.w equ 80
-vid.h equ 25
+msg db "Hello, World!", 0
